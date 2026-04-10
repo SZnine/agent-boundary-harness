@@ -33,3 +33,9 @@ traces/*.json
 .pytest_cache/
 .coverage
 htmlcov/
+
+# Secrets
+key.md
+
+# Data (regenerable)
+data/atlas_stix.json
