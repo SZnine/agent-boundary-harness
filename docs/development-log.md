@@ -1,8 +1,8 @@
 # 开发记录（Development Log）
 
-**项目**：agent-boundary-harness v0.1
+**项目**：agent-boundary-harness
 **开始时间**：2026-04-07
-**当前阶段**：阶段 1 - 模块接口冻结 → 实现
+**当前阶段**：v0.1 完成，终态架构已确认（v0.2 待启动）
 
 ---
 
@@ -155,3 +155,65 @@
 - **Step 4 完成**：标准测试用例合并到 Step 3 的 `run_standard_suite()`
 - **编码问题修复**：Windows GBK → UTF-8（`sys.stdout = io.TextIOWrapper(..., encoding='utf-8')`）
 - **Step 5 完成**：攻击测评报告输出 + JSON 持久化，首轮标准测试 L1=2, L2=2, L3=0
+
+### 2026-04-10
+
+**终态架构设计确认**
+
+基于 core-idea-v0 的自检分析，确认 v1.0 终态架构的核心决策：
+
+1. **Skill 层与 Harness 层分离**
+   - Skill：抽象层组件，负责攻击策略调度
+   - Harness：执行层，负责攻击执行和轨迹记录
+   - 交互方式：同步函数调用（`get_next_strategy()`, `record_result()`）
+
+2. **Skill 层渐进建设顺序（4 阶段）**
+   - v0.2：AttackPatternStore（用 LLM 分析漏洞库初始化素材）
+   - v0.3：WeightMatrix + CostBenefitModel（积累数据后启用）
+   - v0.4：FailureFingerprintLib + 自增强闭环
+   - v0.5：数据隔离（PublicPatternExporter）
+
+3. **Schema + LLM 混合索引**
+   - Schema 精确匹配（零成本）
+   - Embedding 向量检索（低成本召回候选）
+   - LLM 语义排序（高成本但只在不确定时触发）
+
+4. **session_context 分层传递**
+   - 层 1：必传（current_trace, target_seam/boundary, iteration_depth）
+   - 层 2：摘要（session_history_summary, historical_hit_summary）
+   - 层 3：按需加载（full_trace_history 懒加载）
+
+5. **审计触发点**
+   - estimated_tokens > 阈值
+   - requires_llm_call && iteration_depth > 2
+   - 任何 L3 发现
+
+6. **L3 → 控制需求路径**
+   - 终态存在 ControlRequirementMapper
+   - 实现优先级低于 Skill 基础能力
+
+7. **数据隔离策略**
+   - PublicPatternExporter 独立组件
+   - 不影响系统内部功能
+   - 导出模式抽象，不导出具体载荷
+
+**文档结构（当前）**：
+
+| 文档 | 定位 | 状态 |
+|---|---|---|
+| [core-idea-v0.md](core-idea-v0.md) | 战略层：目标、原则 | 冻结 |
+| [threat-model-v0.md](threat-model-v0.md) | 攻击视角：角色、Seam、边界、失败分类 | 冻结 |
+| [system-interface-v0.md](system-interface-v0.md) | 接口层：组件图、接口、数据结构、事件流 | 新增，冻结 |
+| [superpowers/specs/2026-04-10-terminal-architecture-design.md](../superpowers/specs/2026-04-10-terminal-architecture-design.md) | 终态架构设计（v1.0 目标） | 新增，待审阅 |
+| [development-log.md](development-log.md) | 实施记录：长期追加，不重构删减 | 持续 |
+| [stage1-knowledge-check.md](stage1-knowledge-check.md) | 阶段门控问题（一次性使用） | 待归档 |
+| [archived/](archived/) | 已归档文档（architecture-v0, trace-schema-v0）| 历史 |
+
+**开发日志规范**：
+- **每次开发会话结束时**追加一条变更记录，包含：日期、关键决策、实施动作、产出产物
+- **不重构删减**：历史条目只追加，不修改。如果早期决策被证明错误，在新条目中记录纠偏，而不是修改原条目
+- **时间顺序**：条目按时间倒序（最新在前），方便快速定位当前状态
+- **产物追踪**：每完成一个子任务，用 ✅ 标记状态
+- **全局变更日志**：每个自然日在顶部汇总该日所有变更，便于快速浏览
+
+**已完成**：终态架构设计文档已审阅通过，2026-04-10 spec 提交 git
