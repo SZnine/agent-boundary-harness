@@ -16,6 +16,8 @@ from enum import Enum
 import uuid
 import json
 
+from src.skill.models import SessionContext, DecisionTraceUnit
+
 
 class FailureClassification(Enum):
     """失败分类"""
@@ -123,15 +125,17 @@ class Harness:
     - 产出结构化攻击测评报告
     """
 
-    def __init__(self, mock_gateway, fake_tool_registry):
+    def __init__(self, mock_gateway, fake_tool_registry, skill_api=None):
         """
         Args:
             mock_gateway: MockGateway 实例
             fake_tool_registry: FakeToolRegistry 实例
+            skill_api: Optional SkillAPI 实例用于策略驱动测试
         """
         self.gateway = mock_gateway
         self.fake_tools = fake_tool_registry
         self.sessions: Dict[str, AttackSession] = {}
+        self.skill_api = skill_api
 
     def run_standard_suite(self) -> List[AttackSession]:
         """
@@ -140,6 +144,9 @@ class Harness:
         Returns:
             4 个 AttackSession 列表
         """
+        if self.skill_api is not None:
+            return self.run_skill_driven_suite()
+
         sessions = []
 
         # T-I1-A1: 用户输入直接诱导工具选择
@@ -191,6 +198,65 @@ class Harness:
         sessions.append(session4)
 
         # 保存会话
+        for session in sessions:
+            self.sessions[session.session_id] = session
+
+        return sessions
+
+    def run_skill_driven_suite(self, seam_boundary_pairs=None) -> List[AttackSession]:
+        """
+        从 Skill 获取策略运行测试。
+
+        Args:
+            seam_boundary_pairs: 要测试的 (seam, boundary) 列表。
+                默认覆盖 v0.1 的 4 个组合。
+        """
+        if seam_boundary_pairs is None:
+            seam_boundary_pairs = [
+                ("I1", "A1"), ("I2", "A1"), ("I5", "A1"), ("M1", "A2")
+            ]
+
+        sessions = []
+        for seam, boundary in seam_boundary_pairs:
+            ctx = SessionContext(
+                current_trace=DecisionTraceUnit(
+                    trace_id=str(uuid.uuid4()),
+                    session_id=str(uuid.uuid4()),
+                    iteration_depth=1
+                ),
+                target_seam=seam,
+                target_boundary=boundary,
+                iteration_depth=1
+            )
+
+            strategy = self.skill_api.get_next_strategy(ctx)
+
+            if strategy is None:
+                continue
+
+            session = self._run_attack(
+                session_id=ctx.current_trace.session_id,
+                initial_task=f"Skill-driven: {strategy.strategy_id}",
+                target_boundary=boundary,
+                seam=seam,
+                payload=strategy.render_payload(),
+                probe_direction=strategy.rationale,
+                iteration_depth=1
+            )
+
+            # 回传结果给 Skill
+            if session.iteration_chain:
+                result = session.iteration_chain[0]
+                self.skill_api.record_result({
+                    "trace_id": result.trace_id,
+                    "session_id": result.session_id,
+                    "failure_classification": result.failure_classification.value,
+                    "seam": seam,
+                    "boundary": boundary
+                })
+
+            sessions.append(session)
+
         for session in sessions:
             self.sessions[session.session_id] = session
 

@@ -11,12 +11,6 @@ Harness 主控逻辑单元测试
 import sys
 import os
 
-# Fix Windows console encoding
-if sys.platform == 'win32':
-    import io
-    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
-    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8')
-
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
 
 from src.sandbox.fake_tools import FakeToolRegistry
@@ -218,6 +212,22 @@ def test_continuation_decision_l1_stops():
     print("✓ L1 停止迭代验证")
 
 
+def test_harness_uses_skill_for_strategy():
+    """Harness 从 Skill 获取策略而非内部硬编��"""
+    from src.skill.skill_api import SkillAPI
+
+    fake_tools = FakeToolRegistry()
+    gateway = MockGateway(fake_tools)
+    skill = SkillAPI(data_path="data/attack_patterns.json")
+    harness = Harness(gateway, fake_tools, skill_api=skill)
+
+    # 运行 Skill 驱动测试
+    sessions = harness.run_skill_driven_suite()
+    assert len(sessions) > 0
+    for session in sessions:
+        assert session.initial_task != ""
+
+
 if __name__ == "__main__":
     print("运行 Harness 主控逻辑单元测试...\n")
 
@@ -231,5 +241,6 @@ if __name__ == "__main__":
     test_save_report()
     test_continuation_decision_l3_stops()
     test_continuation_decision_l1_stops()
+    test_harness_uses_skill_for_strategy()
 
     print("\n所有测试通过 ✓")
