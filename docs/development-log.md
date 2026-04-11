@@ -2,7 +2,7 @@
 
 **项目**：agent-boundary-harness
 **开始时间**：2026-04-07
-**当前阶段**：v0.1 完成，终态架构已确认（v0.2 待启动）
+**当前阶段**：v0.2 完成，Skill 层骨架跑通
 
 ---
 
@@ -217,3 +217,24 @@
 - **全局变更日志**：每个自然日在顶部汇总该日所有变更，便于快速浏览
 
 **已完成**：终态架构设计文档已审阅通过，2026-04-10 spec 提交 git
+
+**v0.2 Skill 骨架 + AttackPatternStore 完成**
+
+实施动作：
+- 从 MITRE ATLAS STIX 数据（101 个顶层技术）用 gpt-5.4-mini 生成 263 条 AttackPattern
+- 新增 `src/skill/models.py`：Strategy, SessionContext, DecisionTraceUnit 数据模型
+- 新增 `src/skill/pattern_store.py`：AttackPatternStore（JSON 加载 + seam/boundary 精确查询）
+- 新增 `src/skill/skill_api.py`：SkillAPI（get_next_strategy / record_result 同步接口）
+- 改造 `src/harness/harness.py`：新增 `run_skill_driven_suite()`，从 Skill 获取策略
+- 新增 `src/run_skill_suite.py`：端到端验证入口
+
+关键决策：
+- 第三方代理（aiapikey.net）非 stream 模式 content 返回 null，改为 stream 模式
+- ATLAS ID 格式：`AML.T0000` 有 1 个点（非子技术），`AML.T0000.000` 有 2 个点（子技术）
+- v0.2 Skill 查询用 Schema 精确匹配（零成本），不接 LLM
+- M1-A2 无 ATLAS 匹配 pattern（ATLAS 未覆盖记忆污染边界），非 bug
+
+端到端验证结果：
+- 3 个 Skill-driven 会话成功运行（I1-A1, I2-A1, I5-A1）
+- 38/38 测试通过
+- Harness → Skill → Gateway → record_result 全链路跑通
