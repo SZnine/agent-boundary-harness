@@ -1,8 +1,3 @@
-import sys, io
-if sys.platform == "win32":
-    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
-    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8', errors='replace')
-
 import os
 import pytest
 from src.agent.llm_config import LLMConfig
@@ -30,3 +25,32 @@ def test_llm_config_from_env_defaults(monkeypatch):
     monkeypatch.delenv("OPENAI_BASE_URL", raising=False)
     config = LLMConfig.from_env()
     assert config.base_url == "https://www.aiapikey.net/v1"
+
+
+from src.agent.target_agent import TargetAgent, ToolCallRecord, TargetAgentResult
+
+
+def test_tool_call_record_creation():
+    record = ToolCallRecord(
+        turn=1,
+        tool_name="read_file",
+        args={"path": "/workspace/notes.txt"},
+        gateway_decision="ALLOW",
+        gateway_reason="whitelist match",
+        tool_output="file content here"
+    )
+    assert record.turn == 1
+    assert record.tool_name == "read_file"
+
+
+def test_target_agent_result_creation():
+    result = TargetAgentResult(
+        messages=[{"role": "user", "content": "test"}],
+        tool_calls=[],
+        gateway_decisions=[],
+        final_response="done",
+        turns_used=0
+    )
+    assert result.turns_used == 0
+    assert result.final_response == "done"
+    assert len(result.tool_calls) == 0
