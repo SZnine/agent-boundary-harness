@@ -297,7 +297,30 @@ Skill 层（积累 → 调度下一次攻击）
 |---|---|---|
 | A. 最简 LLM Agent（API 调用） | ~70%（20/35） | I1~I3, I5 × A1~A3, M1 可测；I4 和 M2 受限 |
 | B. +RAG +会话记忆 | ~100%（35/35） | 全覆盖，需额外实现检索工具和状态持久化 |
-| C. 对接现有框架（LangChain 等） | ~100% | 覆盖同 B，但集成成本极高 |
+| C. 对接现有框架（LangChain 等） | ~100% | 覆���同 B，但集成成本极高 |
+
+**现有框架对比分析**
+
+| 框架 | 定位 | 核心架构 | 自增强 | 与我们差异 |
+|---|---|---|---|---|
+| **NVIDIA garak** | LLM 漏洞扫描器（"LLM 的 nmap"） | probes → generators → detectors → evaluator | ❌ 跑完就结束 | 不测 Agent+Gateway 场景 |
+| **promptfoo** | LLM 评估 + 红队平台（已被 OpenAI 收购） | YAML 声明式配置 → 评估 → Web UI | ❌ 跑完就结束 | 是评估工具，不是审计工具 |
+| **llm-attacks (GCG)** | 对抗性攻击学术研究 | GCG 算法自动搜索对抗后缀 | ❌ 无 | 纯学术，不支持 Agent |
+| **Superpowers** | Claude Code 开发工作流插件 | 强制门控 + 检查点持久化 + 技能链 | ❌ 无（靠人驱动） | 设计模式可借鉴 |
+
+**核心差异：没有一个现有框架实现了"从结果中学习，每次更聪明"。这是我们的核心差异化。**
+
+可借鉴的设计：
+
+| 借鉴点 | 来源 | 应用方式 |
+|---|---|---|
+| 插件化架构（probe/detector/generator 独立） | garak | Harness 的工具/网关/分类器各自可插拔 |
+| LLM 生成攻击载荷（atkgen 模式） | garak | Skill 的"思考引擎"包含 LLM 生成攻击能力 |
+| 声明式配置降低门槛 | promptfoo | 用户用 YAML 定义测试目标 |
+| 多模型并行验证可迁移性 | promptfoo + llm-attacks | 同一攻击在多个 LLM 上验证 |
+| 强制门控防止跳步 | Superpowers | 审计触发点硬性不可跳过 |
+| 技能链组合 | Superpowers | Skill 可组合（分析→生成→执行→评估→学习） |
+| 检查点持久化 | Superpowers | 每次攻击结果可追溯 |
 
 **关键反思（待解决）**：
 
