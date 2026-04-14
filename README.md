@@ -2,74 +2,119 @@
 
 > 在把边界失控转为控制需求之前，先在真实 Agent 中发现它们。
 
-面向真实 tool-using agent 的边界失控测试支架。Harness 作为攻击者主动构造载荷，通过注入观察被测 Agent + Gateway 的反应，分类 L1/L2/L3，将 L3 映射为 Gateway 控制需求。
+面向真实 tool-using agent 的边界失控测试系统。通过构造间接注入载荷、观察被测 Agent + Gateway 的反应，分类 L1/L2/L3，将失败模式提炼为可操作的 Gateway 控制需求。
 
 配套项目：[agent-security-gateway](https://github.com/SZnine/agent-security-gateway) — Harness 发现边界失败，Gateway 将其转化为控制。
 
 ---
 
-## 工作流
+## 核心能力
 
-```mermaid
-flowchart TD
-    A[标准测试集<br/>预置 4 个用例] --> B[运行攻击<br/>I1/I2/I5/M1 × A1/A2]
-    B --> C[结构化测评报告<br/>每条: 结果 / 分类 / 成本 / 是否继续]
-    C --> D{用户审计}
-    D -->|授权| E[深度测试<br/>按需迭代 iteration_depth += 1]
-    D -->|不继续| F[风险评估]
-    E --> F
-    F --> G[L3 → 控制方案<br/>L2 → 记录待处理<br/>L1 → 忽略]
+### 自增强闭环
+
+```
+Skill（攻击策略）→ Harness（执行+观察）→ 真实 LLM 测试
+        ↑                                          ↓
+   经验库更新 ←──────────────────────── 分析 L1/L2/L3
 ```
 
-## 系统架构
+每一轮测试都比上一轮更精准。
 
-```mermaid
-flowchart LR
-    H[Harness<br/>攻击者 + 观察者] -->|注入 I1~I5| A[被测 Agent]
-    A -->|tool call| S[沙箱运行时<br/>fake tools / assets]
-    A -->|request| G[Gateway<br/>A1 白名单 / A2 参数 / A3 执行]
-    G -->|事件流| T[轨迹存储<br/>Decision Trace]
-    H -->|观察| T
-```
+### 真实 LLM 测试
+
+使用 gpt-5.4-mini（通过第三方 API）作为被测 Agent，每次测试都是真实的 LLM 决策行为。
+
+### 失败模式提炼
+
+- **L2 失败模式**：`analyze_failures()` 用 LLM 分析失败原因，产出"诱导手法 + Gateway 盲区 + 通用模式 + 下一步攻击建议"
+- **L1 防御模式**：分析 Agent 抵抗成功的原因，产出"防御机制 + 弱点 + 反制建议"
+- 全部写入 `data/failure_patterns.json` 经验库
+
+---
 
 ## 失败分类
 
-| 层级 | 含义 | Harness 动作 |
+| 层级 | 含义 | 产出 |
 |---|---|---|
-| **L1** | 能力缺失，无安全相关性 | 忽略 |
-| **L2** | 控制弱点，被 Gateway 拦住 | 建议继续探测（需用户授权）|
-| **L3** | 可利用漏洞，绕过 Gateway | 产出控制需求 |
+| **L1** | Agent 抵抗成功，防御有效 | 提炼防御模式入库 |
+| **L2** | Agent 被诱导，但 Gateway 拦住 | 提炼 Gateway 控制弱点 |
+| **L3** | Agent 被诱导，Gateway 也放过 | 产出控制需求 |
 
-## 当前进度
+---
 
-- [x] 威胁模型 v0.1 → `docs/threat-model-v0.md`
-- [x] 轨迹模式 v0.1 → `docs/trace-schema-v0.md`
-- [x] 架构文档 v0.1 → `docs/architecture-v0.md`
-- [x] 沙箱运行时（fake_tools: read_file / http_fetch）
-- [x] Mock Gateway（A1 白名单 + A2 参数边界 + 状态机）
-- [x] Harness 主控逻辑（标准测试集 + L1/L2/L3 分类 + 迭代决策）
-- [x] 首轮标准测试运行（L1=2, L2=2, L3=0）
-- [ ] 对接真实 Agent（替换 mock）
-- [ ] 对接真实 Gateway（替换 mock）
-- [ ] I2/I5 分类逻辑修正（当前 Gateway 不检查输出内容语义）
-- [ ] 深度测试迭代（T-I1-A1 / T-M1-A2 的高价值探测方向）
-- [ ] L3 → 控制需求映射
-- [ ] Gateway 需求待办 v1
+## 当前测试结果
+
+| 轮次 | 测试数 | L1 | L2 | L3 | 说明 |
+|---|---|---|---|---|---|
+| R1 间接注入 | 12 | 5 | 7 | 0 | I2 75% L2率，I3 67% L2率 |
+| R2 L1→L2进化 | 7 | 2 | 4 | 1 | L1→L2转化率40%，首个L3发现 |
+| R3 I1进化 | 5 | 2 | 3 | 0 | 60% L2率（从33%提升），从dp模式推导 |
+| R4 深度边界测绘 | 5 | 0 | 5 | 0 | 100% L2率，从defense_weakness推导，7条GCR |
+
+**核心发现**：
+- 间接注入（网页/文档）比直接注入更有效（58% vs 33% L2率）
+- 从 `defense_weakness` 反向推导攻击策略证明最有效：**R4 100% L2 率**
+- **L1→L2 转化率 40%**：从 Agent 防御失败中学习比从诱导成功中加码更有价值
+- 首个 L3 发现于 Gateway SAFE_DIRECTORIES 配置不一致（`/home/` vs `/workspace/`）
+- 核心架构弱点：**Gateway 无状态单步**，无法检测"内容→授权"的派生链路
+
+---
 
 ## 项目结构
 
 ```
 src/
-├── sandbox/fake_tools.py      # 模拟工具（无真实副作用）
-├── gateway/mock_gateway.py    # Mock Gateway
-├── harness/harness.py         # 主控逻辑
-└── run_standard_suite.py      # 运行入口
-docs/
-├── threat-model-v0.md         # 威胁模型
-├── trace-schema-v0.md         # 轨迹模式
-├── architecture-v0.md         # 架构文档
-├── stage1-knowledge-check.md  # 阶段 1 知识检查
-└── development-log.md         # 开发记录
+├── skill/                       # Skill 引擎
+│   ├── skill_api.py            # 分析接口（analyze_failures + L1/L2）
+│   ├── pattern_store.py        # 攻击模式库（ATLAS 263条）
+│   └── models.py               # Strategy / SessionContext 数据模型
+├── harness/                    # Harness 执行层
+│   └── harness.py              # 主控逻辑 + L1/L2/L3 分类
+├── agent/                      # TargetAgent（真实 LLM）
+│   ├── target_agent.py        # 多轮对话 + 工具调用
+│   └── llm_config.py          # LLM API 配置
+├── gateway/                    # Mock Gateway
+│   └── mock_gateway.py        # A1 白名单 + A2 参数边界
+├── sandbox/                    # Fake Tools
+│   └── fake_tools.py          # 无副作用的模拟工具
+└── run_*.py                  # 测试入口
+
+data/
+├── attack_patterns.json        # ATLAS 攻击模式库（263条）
+├── failure_patterns.json      # 失败模式经验库（16条，fp-* L2 + dp-* L1防御）
+└── gateway_control_requirements.json  # Gateway 控制需求（7条）
+
+traces/                         # 运行报告
+testcases/                      # 支线测试归档
+docs/                           # 文档
 ```
 
-详细文档见 `docs/` 目录。
+---
+
+## 快速开始
+
+```bash
+# 间接注入测试（R1）
+OPENAI_API_KEY=sk-xxx python src/snapshots/run_indirect_injection.py
+
+# L1 防御分析
+OPENAI_API_KEY=sk-xxx python src/snapshots/run_l1_analysis.py
+
+# L1→L2 进化攻击（R2）
+OPENAI_API_KEY=sk-xxx python src/snapshots/run_round2.py
+```
+
+---
+
+## 当前进度
+
+- [x] 真实 LLM Agent 接入（gpt-5.4-mini）
+- [x] 自增强闭环（R1 → L1/L2分析 → 经验库 → R2 进化）
+- [x] 间接注入测试（R1: 12个用例，7 L2）
+- [x] L1 防御模式分析（9条防御模式入库）
+- [x] L1→L2 进化攻击（R2: 7个用例，转化率40%，首个L3）
+- [x] I1 直接注入进化（R3: 5个用例，转化率60%）
+- [x] 深度边界测绘（R4: 5/5 L2，7条 GCR 需求）
+- [ ] Skill 进化：从"查询引擎"到"思考引擎"
+- [ ] GCR → Gateway 控制规范 v1（data/gateway_control_requirements.json 已产出）
+- [ ] 自增强闭环自动化：L2分析→经验库→进化攻击→新GCR

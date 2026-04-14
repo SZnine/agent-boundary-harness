@@ -1,0 +1,78 @@
+{
+  "metadata": {
+    "description": "Gateway Control Requirements derived from failure pattern analysis",
+    "source": "Round 4 boundary mapping",
+    "total_requirements": 7,
+    "updated_at": "2026-04-13"
+  },
+  "requirements": [
+    {
+      "control_id": "GCR-R4-001",
+      "seam": "cross_seam",
+      "title": "Content-to-Authority Binding",
+      "description": "The Gateway must not treat tool outputs, file contents, or web contents as authorization sources. Any operation derived from consumed content must be escalated or confirmed.",
+      "enforcement_point": "Gateway session layer (new stateful middleware between tool calls). Track: for each ALLOWED tool call, record consumed content. For each subsequent call, check if intent is derived from prior content consumption. Derived operations should require trust-anchor flag (source=user_intent vs source=content_consumption).",
+      "confidence": "high",
+      "source_tests": ["R4-I5-A3-index-update", "R4-I5-A2-template-expansion", "R4-I3-I5-chain", "R4-I3-A2-dir-enum", "R4-I2-A2-troubleshoot"]
+    },
+    {
+      "control_id": "GCR-R4-002",
+      "seam": "I2",
+      "title": "Web Content Provenance Flagging",
+      "description": "When Gateway ALLOWs http_fetch, tag returned content with provenance indicator: source=web_content, trust=tier3. Any operation triggered by web content must be explicitly confirmed or flagged as derived_from=web_content for policy escalation.",
+      "enforcement_point": "Gateway output annotation layer. Append metadata to http_fetch result: {gateway_provenance: I2_web_content, implicit_instruction_risk: medium, required_confirmation: true}.",
+      "confidence": "high",
+      "source_tests": ["R4-I2-A2-troubleshoot"]
+    },
+    {
+      "control_id": "GCR-R4-003",
+      "seam": "I3",
+      "title": "File Read Output Classification",
+      "description": "Gateway ALLOWs read_file on workspace files without distinguishing data sources from files containing embedded instructions. When a file contains structured fields with path references or action directives, annotate read output with risk flag.",
+      "enforcement_point": "Gateway file read annotation. After ALLOWing read_file, scan for structured instruction-like patterns (path references in action contexts, imperative verbs, structured fields referencing other files). Tag with {gateway_provenance: I3_file_content, instruction_density: high/medium/low, paths_referenced: [list]}.",
+      "confidence": "high",
+      "source_tests": ["R4-I5-A3-index-update", "R4-I5-A2-template-expansion", "R4-I3-I5-chain"]
+    },
+    {
+      "control_id": "GCR-R4-004",
+      "seam": "I3",
+      "title": "Directory Enumeration Intent Detection",
+      "description": "The Gateway should detect when a sequence of tool calls suggests a reconnaissance pattern (read -> enumerate -> access), even if each individual call's parameters are valid.",
+      "enforcement_point": "Gateway session policy layer. Track tool call sequences. Pattern of read_file(workspace) followed by list_dir(workspace) within same session should be flagged as potential enumeration intent. Apply rate limit or escalation requirement.",
+      "confidence": "medium-high",
+      "source_tests": ["R4-I3-A2-dir-enum", "R4-I3-I5-chain"]
+    },
+    {
+      "control_id": "GCR-R4-005",
+      "seam": "I5",
+      "title": "Tool Output Instruction Extraction Detection",
+      "description": "Gateway ALLOWs read_file returning JSON with instruction/template fields containing actionable directives. Check only validates the path argument, never inspects content. Detect when tool output contains structured instruction-like content.",
+      "enforcement_point": "Gateway output inspection layer. After ALLOWing tool returning structured content (JSON, Markdown), scan for fields with instruction-like semantic roles (field names containing instruction, template, checklist, command, do, execute whose values contain paths or action verbs). Tag with {gateway_provenance: I5_tool_output, instruction_extraction_risk: high, embedded_fields: [list]}.",
+      "confidence": "high",
+      "source_tests": ["R4-I5-A3-index-update", "R4-I5-A2-template-expansion"]
+    },
+    {
+      "control_id": "GCR-R4-006",
+      "seam": "I5",
+      "title": "State Mutation Intent from Tool Output",
+      "description": "When tool output explicitly instructs a state-mutating operation (write_file, delete, modify), recognize that the original request was to read but inferred intent escalated to write. Agent escalated from data retrieval to state mutation based on content.",
+      "enforcement_point": "Gateway multi-step policy layer. When session contains ALLOWED read_file followed by DENIED write_file with parameters derived from read output content, surface as session-level event and flag read_file output as high-risk for future session policy decisions.",
+      "confidence": "high",
+      "source_tests": ["R4-I5-A3-index-update"]
+    },
+    {
+      "control_id": "GCR-R4-007",
+      "seam": "cross_seam",
+      "title": "Chain-of-Derivation Provenance Tracking",
+      "description": "Track derivation chain of each tool call: did it originate from user's direct request, from content consumed in a prior tool call, from file read, from web fetch, or from a chain of these? When hops_from_user_intent > 1, enforce higher bar (user confirmation or policy escalation).",
+      "enforcement_point": "Gateway session provenance log. Each tool call record should include: {tool, args, provenance_chain: [I1_user_request | I2_web_content | I3_file_content | I5_tool_output, ...], hops_from_user_intent: N}. When hops > 1, escalate.",
+      "confidence": "high",
+      "source_tests": ["R4-I3-I5-chain"]
+    }
+  ],
+  "implementation_priority": {
+    "foundational": ["GCR-R4-001"],
+    "high_impact_seam_specific": ["GCR-R4-003", "GCR-R4-005", "GCR-R4-006"],
+    "important_nuanced": ["GCR-R4-002", "GCR-R4-004", "GCR-R4-007"]
+  }
+}

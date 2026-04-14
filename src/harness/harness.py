@@ -16,7 +16,7 @@ from enum import Enum
 import uuid
 import json
 
-from src.skill.models import SessionContext, DecisionTraceUnit
+from src.skill.skill_model import SessionContext, DecisionTraceUnit
 from src.agent.target_agent import TargetAgent
 
 

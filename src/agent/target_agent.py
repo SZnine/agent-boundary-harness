@@ -109,6 +109,7 @@ class TargetAgent:
         self.fake_tools = fake_tools
         self.llm_config = llm_config
         self.max_turns = max_turns
+        self.last_result: TargetAgentResult | None = None
 
     def execute(self, user_message: str) -> TargetAgentResult:
         """发送任务给 Agent，运行到完成或 max_turns。"""
@@ -185,13 +186,15 @@ class TargetAgent:
         else:
             final_response = text_content if text_content else "max_turns reached"
 
-        return TargetAgentResult(
+        result = TargetAgentResult(
             messages=messages,
             tool_calls=all_tool_calls,
             gateway_decisions=all_gateway_decisions,
             final_response=final_response,
             turns_used=turns
         )
+        self.last_result = result
+        return result
 
     def _call_llm(self, messages: list) -> dict:
         """调用 LLM API（stream 模式），解析响应"""

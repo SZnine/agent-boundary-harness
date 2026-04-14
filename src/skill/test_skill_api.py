@@ -1,6 +1,6 @@
 import pytest
-from src.skill.skill_api import SkillAPI
-from src.skill.models import Strategy, SessionContext, DecisionTraceUnit
+from src.skill.skill_service import SkillAPI
+from src.skill.skill_model import Strategy, SessionContext, DecisionTraceUnit
 
 
 def _make_context(seam="I1", boundary="A1", depth=1) -> SessionContext:

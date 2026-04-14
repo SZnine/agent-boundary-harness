@@ -1,5 +1,5 @@
 import pytest
-from src.skill.models import Strategy, SessionContext, DecisionTraceUnit
+from src.skill.skill_model import Strategy, SessionContext, DecisionTraceUnit
 
 
 def test_strategy_creation():

@@ -214,7 +214,7 @@ def test_continuation_decision_l1_stops():
 
 def test_harness_uses_skill_for_strategy():
     """Harness 从 Skill 获取策略而非内部硬编��"""
-    from src.skill.skill_api import SkillAPI
+    from src.skill.skill_service import SkillAPI
 
     fake_tools = FakeToolRegistry()
     gateway = MockGateway(fake_tools)

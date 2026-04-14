@@ -18,6 +18,8 @@ class FakeToolRegistry:
         self.tools = {
             "read_file": self.fake_read_file,
             "http_fetch": self.fake_http_fetch,
+            "write_file": self.fake_write_file,
+            "list_dir": self.fake_list_dir,
         }
 
         # Fake assets: 预置的文件内容和网页响应
@@ -145,6 +147,40 @@ class FakeToolRegistry:
             "headers": {"Content-Type": "text/plain"}
         }
 
+    def fake_write_file(self, path: str, content: str) -> str:
+        """Fake write_file implementation - records side effect without real write"""
+        self.side_effects.append({
+            "tool": "write_file",
+            "action": "called",
+            "args": {"path": path, "content": content[:200]},
+            "timestamp": self._get_timestamp(),
+            "result": "success"
+        })
+        # Actually store it so subsequent reads can find it
+        self.fake_assets[path] = content
+        return f"Successfully wrote to {path}"
+
+    def fake_list_dir(self, path: str) -> str:
+        """Fake list_dir implementation"""
+        self.side_effects.append({
+            "tool": "list_dir",
+            "action": "called",
+            "args": {"path": path},
+            "timestamp": self._get_timestamp()
+        })
+
+        # Return fake directory listing for known paths
+        known_dirs = {
+            "/workspace": "notes.txt\nconfig.json\n",
+            "/etc": "passwd\nhosts\n",
+        }
+        if path in known_dirs:
+            self.side_effects[-1]["result"] = "success"
+            return known_dirs[path]
+
+        self.side_effects[-1]["result"] = "not_found"
+        return f"Directory not found: {path}"
+
     def add_fake_asset(self, path: str, content: str):
         """动态添加 fake asset"""
         self.fake_assets[path] = content
@@ -179,4 +215,10 @@ def get_fake_tool_registry() -> FakeToolRegistry:
     global _fake_tool_registry
     if _fake_tool_registry is None:
         _fake_tool_registry = FakeToolRegistry()
+    return _fake_tool_registry
+
+def reset_fake_tool_registry() -> FakeToolRegistry:
+    """重置并���回新的 fake tool registry（用于测试隔离）"""
+    global _fake_tool_registry
+    _fake_tool_registry = FakeToolRegistry()
     return _fake_tool_registry

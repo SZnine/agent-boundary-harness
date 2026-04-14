@@ -39,3 +39,7 @@ key.md
 
 # Data (regenerable)
 data/atlas_stix.json
+data/atlas_raw.json
+
+# Temp
+temp_q.txt

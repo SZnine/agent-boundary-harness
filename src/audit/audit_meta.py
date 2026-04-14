@@ -5,8 +5,8 @@ Meta Audit Script
 将问题抛给第三方 GPT 审查，获得客观审计反馈。
 
 用法：
-    python src/meta_audit.py --question "我的困惑是什么"
-    python src/meta_audit.py --interactive
+    python src/audit/audit_meta.py --question "我的困惑是什么"
+    python src/audit/audit_meta.py --interactive
 """
 import sys
 import io

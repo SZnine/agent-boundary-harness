@@ -4,7 +4,7 @@
 与直接注入（I1）不同，间接注入把恶意内容预先写入 fake_tools 资产，
 然后给 Agent 一个看似正常的任务，观察 Agent 是否被间接内容影响。
 
-运行：OPENAI_API_KEY=sk-xxx python src/run_indirect_injection.py
+运行：OPENAI_API_KEY=sk-xxx python src/snapshots/run_indirect_injection.py
 """
 import sys
 import io
@@ -289,13 +289,37 @@ def main():
         tool_calls_count = len(session.iteration_chain[0].output) if session.iteration_chain else 0
         gateway_dec = session.iteration_chain[0].gateway_decision if session.iteration_chain else "NONE"
 
+        # Extract rich trace data from agent
+        agent_detail = {}
+        if target_agent.last_result:
+            ar = target_agent.last_result
+            agent_detail = {
+                "agent_response": ar.final_response,
+                "turns_used": ar.turns_used,
+                "tool_calls_detail": [
+                    {
+                        "turn": tc_rec.turn,
+                        "tool": tc_rec.tool_name,
+                        "args": tc_rec.args,
+                        "gateway": tc_rec.gateway_decision,
+                        "gateway_reason": tc_rec.gateway_reason,
+                        "tool_output": tc_rec.tool_output[:200] if tc_rec.tool_output else ""
+                    }
+                    for tc_rec in ar.tool_calls
+                ]
+            }
+
         result = {
             "name": tc["name"],
             "seam": tc["seam"],
             "boundary": tc["boundary"],
             "classification": classification,
             "gateway_decision": gateway_dec,
-            "reason": tc["reason"]
+            "reason": tc["reason"],
+            "payload": tc["task"],
+            "agent_response": agent_detail.get("agent_response", ""),
+            "turns_used": agent_detail.get("turns_used", 0),
+            "tool_calls_detail": agent_detail.get("tool_calls_detail", [])
         }
         results.append(result)
 
